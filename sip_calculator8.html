@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SIP Calculator</title>
+
+  <!-- Chart.js for graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- html2pdf.js for PDF download -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #e0f7fa;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      background: #fff;
+      border-radius: 12px;
+      padding: 25px;
+      max-width: 450px;
+      margin: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #00796b;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #004d40;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    #result {
+      font-size: 16px;
+      color: #2e7d32;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    canvas {
+      margin-top: 25px;
+      max-width: 100%;
+    }
+
+    @media (max-width: 500px) {
+      .container {
+        padding: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>SIP Calculator</h2>
+    <input id="p" type="number" placeholder="Monthly Investment (₹)">
+    <input id="r" type="number" placeholder="Expected Annual Return (%)">
+    <input id="t" type="number" placeholder="Investment Duration (Years)">
+    <button onclick="calculateSIP()">Calculate</button>
+
+    <div id="pdfContent">
+      <div id="result"></div>
+      <canvas id="lineChart"></canvas>
+      <canvas id="donutChart" style="max-width: 300px; margin: auto;"></canvas>
+    </div>
+
+    <button onclick="downloadPDF()">Download as PDF</button>
+  </div>
+
+  <script>
+    let lineChart = null;
+    let donutChart = null;
+
+    function numberToWords(num) {
+      const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven",
+                 "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+      const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+      if (num === 0) return "Zero";
+      if (num > 99999999) return "Amount too large";
+
+      function convert(n) {
+        if (n < 20) return a[n];
+        if (n < 100) return b[Math.floor(n / 10)] + (n % 10 ? " " + a[n % 10] : "");
+        if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " and " + convert(n % 100) : "");
+        if (n < 100000) return convert(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + convert(n % 1000) : "");
+        return convert(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + convert(n % 100000) : "");
+      }
+
+      return convert(Math.floor(num)) + " Rupees";
+    }
+
+    function calculateSIP() {
+      const P = parseFloat(document.getElementById("p").value);
+      const R = parseFloat(document.getElementById("r").value) / 100 / 12;
+      const T = parseFloat(document.getElementById("t").value);
+      const N = T * 12;
+
+      if (isNaN(P) || isNaN(R) || isNaN(T)) {
+        document.getElementById("result").innerText = "Please enter all valid inputs.";
+        return;
+      }
+
+      const FV = P * (((1 + R) ** N - 1) / R) * (1 + R);
+      const totalInvestment = P * N;
+      const totalReturn = FV - totalInvestment;
+
+      document.getElementById("result").innerHTML = `
+        Total Investment: ₹${totalInvestment.toFixed(2)}<br>
+        ➤ In Words: ${numberToWords(totalInvestment)}<br><br>
+        Total Return: ₹${totalReturn.toFixed(2)}<br>
+        ➤ In Words: ${numberToWords(totalReturn)}<br><br>
+        Future Value: ₹${FV.toFixed(2)}
+      `;
+
+      // Line Chart (Year-wise SIP growth)
+      const labels = [];
+      const data = [];
+      for (let i = 1; i <= T; i++) {
+        const months = i * 12;
+        const value = P * (((1 + R) ** months - 1) / R) * (1 + R);
+        labels.push("Year " + i);
+        data.push(value.toFixed(2));
+      }
+
+      const ctx1 = document.getElementById("lineChart").getContext("2d");
+      if (lineChart) lineChart.destroy();
+      lineChart = new Chart(ctx1, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'SIP Growth Over Time',
+            data: data,
+            borderColor: '#00796b',
+            backgroundColor: 'rgba(0,150,136,0.1)',
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Value (₹)'
+              }
+            }
+          }
+        }
+      });
+
+      // Doughnut Chart (Investment vs Return)
+      const ctx2 = document.getElementById("donutChart").getContext("2d");
+      if (donutChart) donutChart.destroy();
+      donutChart = new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+          labels: ["Total Investment", "Total Return"],
+          datasets: [{
+            data: [totalInvestment, totalReturn],
+            backgroundColor: ["#2196f3", "#4caf50"]
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              position: "bottom"
+            }
+          }
+        }
+      });
+    }
+
+    function downloadPDF() {
+      const content = document.getElementById("pdfContent");
+      const options = {
+        margin: 0.5,
+        filename: "sip_summary.pdf",
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
+      };
+      html2pdf().set(options).from(content).save();
+    }
+  </script>
+
+</body>
+</html>
