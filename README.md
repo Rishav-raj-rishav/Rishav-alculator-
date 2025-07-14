@@ -1,2 +1,2 @@
-# Rishav-alculator-
+# Rishav-calculator-
 Sip calculator 
